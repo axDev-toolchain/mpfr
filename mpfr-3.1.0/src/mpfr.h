@@ -27,7 +27,7 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 #define MPFR_VERSION_MAJOR 3
 #define MPFR_VERSION_MINOR 1
 #define MPFR_VERSION_PATCHLEVEL 0
-#define MPFR_VERSION_STRING "3.1.0-p7"
+#define MPFR_VERSION_STRING "3.1.0-p8"
 
 /* Macros dealing with MPFR VERSION */
 #define MPFR_VERSION_NUM(a,b,c) (((a) << 16L) | ((b) << 8) | (c))
@@ -37,6 +37,18 @@ MPFR_VERSION_NUM(MPFR_VERSION_MAJOR,MPFR_VERSION_MINOR,MPFR_VERSION_PATCHLEVEL)
 /* Check if GMP is included, and try to include it (Works with local GMP) */
 #ifndef __GMP_H__
 # include <gmp.h>
+#endif
+
+/* GMP's internal __gmp_const macro has been removed on 2012-03-04:
+     http://gmplib.org:8000/gmp/rev/d287cfaf6732
+   const is standard and now assumed to be available. If the __gmp_const
+   definition is no longer present in GMP, this probably means that GMP
+   assumes that const is available; thus let's define it to const.
+   Note: this is a temporary fix that can be backported to previous MPFR
+   versions. In the future, __gmp_const should be replaced by const like
+   in GMP. */
+#ifndef __gmp_const
+# define __gmp_const const
 #endif
 
 /* Avoid some problems with macro expansion if the user defines macros
