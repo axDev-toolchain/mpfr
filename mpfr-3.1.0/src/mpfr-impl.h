@@ -646,10 +646,24 @@ union ieee_double_decimal64 { double d; _Decimal64 d64; };
  **************** mpfr_t properties *******************
  ******************************************************/
 
+/* In the following macro, p is usually a mpfr_prec_t, but this macro
+   works with other integer types (without integer overflow). Checking
+   that p >= 1 in debug mode is useful here because this macro can be
+   used on a computed precision (in particular, this formula does not
+   work for a degenerate case p = 0, and could give different results
+   on different platforms). But let us not use an assertion checking
+   in the MPFR_LAST_LIMB() and MPFR_LIMB_SIZE() macros below to avoid
+   too much expansion for assertions (in practice, this should be a
+   problem just when testing MPFR with the --enable-assert configure
+   option and the -ansi -pedantic-errors gcc compiler flags). */
+#define MPFR_PREC2LIMBS(p) \
+  (MPFR_ASSERTD ((p) >= 1), ((p) - 1) / GMP_NUMB_BITS + 1)
+
 #define MPFR_PREC(x)      ((x)->_mpfr_prec)
 #define MPFR_EXP(x)       ((x)->_mpfr_exp)
 #define MPFR_MANT(x)      ((x)->_mpfr_d)
-#define MPFR_LIMB_SIZE(x) ((MPFR_PREC((x))-1)/GMP_NUMB_BITS+1)
+#define MPFR_LAST_LIMB(x) ((MPFR_PREC (x) - 1) / GMP_NUMB_BITS)
+#define MPFR_LIMB_SIZE(x) (MPFR_LAST_LIMB (x) + 1)
 
 
 /******************************************************
@@ -749,7 +763,8 @@ typedef intmax_t mpfr_eexp_t;
 #define MPFR_IS_FP(x)       (!MPFR_IS_NAN(x) && !MPFR_IS_INF(x))
 #define MPFR_IS_SINGULAR(x) (MPFR_EXP(x) <= MPFR_EXP_INF)
 #define MPFR_IS_PURE_FP(x)  (!MPFR_IS_SINGULAR(x) && \
-  (MPFR_ASSERTD (MPFR_MANT(x)[MPFR_LIMB_SIZE(x)-1] & MPFR_LIMB_HIGHBIT), 1))
+  (MPFR_ASSERTD ((MPFR_MANT(x)[MPFR_LAST_LIMB(x)]  \
+                  & MPFR_LIMB_HIGHBIT) != 0), 1))
 
 #define MPFR_ARE_SINGULAR(x,y) \
   (MPFR_UNLIKELY(MPFR_IS_SINGULAR(x)) || MPFR_UNLIKELY(MPFR_IS_SINGULAR(y)))
@@ -1061,7 +1076,7 @@ extern unsigned char *mpfr_stack;
 /* Set a number to 1 (Fast) - It doesn't check if 1 is in the exponent range */
 #define MPFR_SET_ONE(x)                                               \
 do {                                                                  \
-  mp_size_t _size = MPFR_LIMB_SIZE(x) - 1;                            \
+  mp_size_t _size = MPFR_LAST_LIMB(x);                                \
   MPFR_SET_POS(x);                                                    \
   MPFR_EXP(x) = 1;                                                    \
   MPN_ZERO ( MPFR_MANT(x), _size);                                    \
@@ -1213,8 +1228,8 @@ typedef struct {
     _destp = MPFR_MANT (dest);                                              \
     if (MPFR_UNLIKELY (_destprec >= _srcprec))                              \
       {                                                                     \
-        _srcs  = (_srcprec  + GMP_NUMB_BITS-1)/GMP_NUMB_BITS;               \
-        _dests = (_destprec + GMP_NUMB_BITS-1)/GMP_NUMB_BITS - _srcs;       \
+        _srcs  = MPFR_PREC2LIMBS (_srcprec);                                \
+        _dests = MPFR_PREC2LIMBS (_destprec) - _srcs;                       \
         MPN_COPY (_destp + _dests, srcp, _srcs);                            \
         MPN_ZERO (_destp, _dests);                                          \
         inexact = 0;                                                        \
@@ -1227,8 +1242,8 @@ typedef struct {
         mp_limb_t _rb, _sb, _ulp;                                           \
                                                                             \
         /* Compute Position and shift */                                    \
-        _srcs  = (_srcprec  + GMP_NUMB_BITS-1)/GMP_NUMB_BITS;               \
-        _dests = (_destprec + GMP_NUMB_BITS-1)/GMP_NUMB_BITS;               \
+        _srcs  = MPFR_PREC2LIMBS (_srcprec);                                \
+        _dests = MPFR_PREC2LIMBS (_destprec);                               \
         MPFR_UNSIGNED_MINUS_MODULO (_sh, _destprec);                        \
         _sp = (srcp) + _srcs - _dests;                                      \
                                                                             \
@@ -1372,7 +1387,7 @@ typedef struct {
       if (MPFR_LIKELY (MPFR_PREC (dest) == MPFR_PREC (src)))            \
         {                                                               \
           MPN_COPY (MPFR_MANT (dest), MPFR_MANT (src),                  \
-                    (MPFR_PREC (src) + GMP_NUMB_BITS-1)/GMP_NUMB_BITS); \
+                    MPFR_LIMB_SIZE (src));                              \
           inexact = 0;                                                  \
         }                                                               \
       else                                                              \
@@ -1682,7 +1697,7 @@ struct mpfr_group_t {
  MPFR_ASSERTD (_prec >= MPFR_PREC_MIN);                                 \
  if (MPFR_UNLIKELY (_prec > MPFR_PREC_MAX))                             \
    mpfr_abort_prec_max ();                                              \
- _size = (mpfr_prec_t) (_prec + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS;     \
+ _size = MPFR_PREC2LIMBS (_prec);                                       \
  if (MPFR_UNLIKELY (_size * (num) > MPFR_GROUP_STATIC_SIZE))            \
    {                                                                    \
      (g).alloc = (num) * _size * sizeof (mp_limb_t);                    \
@@ -1733,7 +1748,7 @@ struct mpfr_group_t {
  MPFR_ASSERTD (_prec >= MPFR_PREC_MIN);                                 \
  if (MPFR_UNLIKELY (_prec > MPFR_PREC_MAX))                             \
    mpfr_abort_prec_max ();                                              \
- _size = (mpfr_prec_t) (_prec + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS;     \
+ _size = MPFR_PREC2LIMBS (_prec);                                       \
  (g).alloc = (num) * _size * sizeof (mp_limb_t);                        \
  if (MPFR_LIKELY (_oalloc == 0))                                        \
    (g).mant = (mp_limb_t *) (*__gmp_allocate_func) ((g).alloc);         \
@@ -1886,7 +1901,7 @@ __MPFR_DECLSPEC void mpfr_abort_prec_max _MPFR_PROTO ((void))
        MPFR_NORETURN_ATTR;
 
 __MPFR_DECLSPEC void mpfr_rand_raw _MPFR_PROTO((mpfr_limb_ptr, gmp_randstate_t,
-                                                unsigned long));
+                                                mpfr_prec_t));
 
 __MPFR_DECLSPEC mpz_t* mpfr_bernoulli_internal _MPFR_PROTO((mpz_t*,
                                                             unsigned long));
