@@ -1130,8 +1130,8 @@ do {                                                                  \
    (r) = _size * GMP_NUMB_BITS - _cnt;       \
   } while (0)
 
-/* Needs <locale.h> */
-#ifdef HAVE_LOCALE_H
+/* Needs <locale.h> (and not Bionic's incomplete version) */
+#if defined(HAVE_LOCALE_H) && !defined(__BIONIC__)
 #include <locale.h>
 /* Warning! In case of signed char, the value of MPFR_DECIMAL_POINT may
    be negative (the ISO C99 does not seem to forbid negative values). */
